@@ -28,8 +28,8 @@ It allows CSV file uploads up to **100MB** and provides multiple visualization o
 - Small multiples for category-wise breakdown
 
 
-
-
+# **Access the Project**
+dataset-analyzer.netlify.app
 
 
 
