@@ -3,16 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dataset Analyzer</title>
+  <title>Auto Insights Dashboard</title>
 
-  <!-- CSS -->
   <link rel="stylesheet" href="style.css" />
 
   <!-- Libraries (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <!-- Chart.js Zoom plugin -->
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@4.0.0/dist/chartjs-plugin-zoom.umd.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.25.2.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -51,10 +49,7 @@
 
   <main id="mainRoot">
     <section id="uploader" class="card">
-      <div class="drop-area" id="dropArea">
-        <p>Drag & drop CSV or XLSX here, or click to choose a file</p>
-      </div>
-      <!-- progress bar injected by JS -->
+      <div class="drop-area" id="dropArea"><p>Drag & drop CSV/XLSX here, or click to choose a file</p></div>
     </section>
 
     <section id="summary" class="card hidden">
@@ -72,22 +67,26 @@
       <h2>Automatic Insights & Visuals</h2>
       <div id="narratives" class="narratives"></div>
 
-      <!-- Core charts -->
+      <!-- Grid A -->
       <div class="charts-grid">
         <div class="chart-card"><canvas id="chartCanvas1"></canvas></div>
         <div class="chart-card"><canvas id="chartCanvas2"></canvas></div>
         <div class="chart-card"><canvas id="chartCanvas3"></canvas></div>
         <div class="chart-card"><canvas id="chartCanvas4"></canvas></div>
-        <div class="chart-card"><canvas id="chartCanvas5"></canvas></div>
-        <div class="chart-card"><canvas id="chartCanvas6"></canvas></div>
-        <div id="boxplot" class="chart-card" style="min-height:220px;"></div>
-        <div id="heatmap" class="chart-card" style="min-height:220px;"></div>
       </div>
 
-      <!-- New visuals -->
+      <!-- Grid B -->
+      <div class="charts-grid">
+        <div class="chart-card"><canvas id="chartCanvas5"></canvas></div>
+        <div class="chart-card"><canvas id="chartCanvas6"></canvas></div>
+        <div id="boxplot" class="chart-card"></div>
+        <div id="heatmap" class="chart-card"></div>
+      </div>
+
+      <!-- Grid C -->
       <div class="charts-grid">
         <div class="chart-card"><canvas id="chartPareto"></canvas></div>
-        <div id="waterfall" class="chart-card" style="min-height:220px;"></div>
+        <div id="waterfall" class="chart-card"></div>
         <div class="chart-card"><canvas id="chartControl"></canvas></div>
       </div>
 
@@ -99,9 +98,11 @@
       </div>
 
       <!-- Small multiples -->
-      <div class="chart-card">
-        <h3 style="margin:0 0 6px 0;font-size:14px;color:#e9f7ff">Small-multiples (top categories)</h3>
-        <div id="smallMultiples" class="sm-grid"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3 class="sm-title">Small-multiples (top categories)</h3>
+          <div id="smallMultiples" class="sm-grid"></div>
+        </div>
       </div>
     </section>
 
@@ -110,22 +111,17 @@
       <div class="table-wrap"><table id="dataTable"></table></div>
     </section>
 
-    <!-- Annotation layer (inside main so it appears in exported PDF) -->
-    <div id="annotWrapper" class="annot-wrapper hidden">
-      <canvas id="annotCanvas"></canvas>
-    </div>
+    <!-- Annotation layer -->
+    <div id="annotWrapper" class="annot-wrapper hidden"><canvas id="annotCanvas"></canvas></div>
   </main>
 
-  <!-- Compact floating annotation dock -->
+  <!-- Floating annotation dock -->
   <div class="annot-dock dock-hidden" id="annotDock">
     <button id="annotToggle" class="dock-btn" title="Annotate">✏️</button>
-
     <div id="annotPanel" class="dock-panel hidden" role="dialog" aria-label="Annotation tools">
       <button id="markerBtn" class="dock-icon" title="Marker">✏️</button>
       <button id="eraserBtn" class="dock-icon" title="Eraser">🧽</button>
-
       <div class="dock-divider"></div>
-
       <div class="dock-group">
         <button id="paletteToggle" class="dock-icon" title="Color & width">🎨</button>
         <div id="palettePop" class="palette-pop hidden">
@@ -142,7 +138,6 @@
           </div>
         </div>
       </div>
-
       <button id="clearAnnots" class="dock-icon" title="Clear">🗑️</button>
     </div>
   </div>
@@ -151,7 +146,6 @@
     <small>Follow me on LinkedIn and GitHub</small>
   </footer>
 
-  <!-- App -->
   <script src="script.js"></script>
 </body>
 </html>
