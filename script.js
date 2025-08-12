@@ -1,5 +1,4 @@
-// Auto Insights Dashboard – ensures at least 4 charts show, hides blank cards,
-// fixes Plotly detection & small-multiples bug, and keeps alignment tight.
+// Auto Insights Dashboard – now with friendly per-chart descriptions and slice values on the donut.
 
 const $ = id => document.getElementById(id);
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
@@ -47,18 +46,18 @@ const arrayMean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
 const arrayStd  = a => { if(!a.length) return 0; const m=arrayMean(a); return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/a.length); };
 const ymKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 
+// Register plugins
 if (window?.chartjs_plugin_zoom) Chart.register(window.chartjs_plugin_zoom);
 else if (window['chartjs-plugin-zoom']) Chart.register(window['chartjs-plugin-zoom']);
+if (window.ChartDataLabels) Chart.register(window.ChartDataLabels);
 
-/* ---------- helpers to show/hide/measure cards ---------- */
+/* ---------- show/hide helpers ---------- */
 function cardOf(idOrEl){ const el = typeof idOrEl==='string' ? $(idOrEl) : idOrEl; return el ? el.closest('.chart-card') : null; }
 function showCard(idOrEl){ const c=cardOf(idOrEl); if(c) c.classList.add('show'); }
 function hideCard(idOrEl){ const c=cardOf(idOrEl); if(!c) return; c.querySelectorAll('.chart-explainer').forEach(n=>n.remove()); c.classList.remove('show'); }
 function prepareCanvas(id){ const el=$(id); if(!el) return null; el.style.display="block"; showCard(el); return el; }
 function preparePlotContainer(id){ const el=$(id); if(!el) return null; showCard(el); return el; }
 function countShown(){ return [...document.querySelectorAll('.chart-card.show')].length; }
-
-// robust detection => only show non-empty cards
 function cleanupEmptyCards(){
   document.querySelectorAll('.chart-card').forEach(card => {
     const canvases=[...card.querySelectorAll('canvas')];
@@ -73,12 +72,14 @@ function cleanupEmptyCards(){
     const anyShown=[...grid.children].some(c=>c.classList.contains('show')); grid.style.display=anyShown?'grid':'none';
   });
 }
-function addExplainer(canvasId, text){
-  const container=$(canvasId)?.parentElement; if(!container) return;
-  const el=document.createElement('div'); el.className='chart-explainer'; el.textContent=text; container.appendChild(el);
+function addExplainer(idOrNode, text){
+  const el = typeof idOrNode==='string' ? $(idOrNode) : idOrNode;
+  const container = el?.parentElement; if(!container) return;
+  const p = document.createElement('div'); p.className='chart-explainer'; p.textContent=text;
+  container.appendChild(p);
 }
 
-/* ---------------- progress bar for upload --------------- */
+/* ---------------- progress bar ---------------- */
 let progressRoot=null, progressBar=null, progressLabel=null, progressRight=null;
 function ensureProgressUI(){
   if (progressRoot) return;
@@ -392,34 +393,82 @@ function buildAllCharts(allRows, colInfo, dateCols, numericCols){
   const categoricalCols=colInfo.filter(c=>c.type==="categorical").map(c=>c.name);
   const used={ date:new Set(), num:new Set(), cat:new Set() };
 
-  // First pass (try to place 4+ immediately)
-  if (dateCols.length && numericCols.length){ if (renderTimeSeriesWithRolling(rows,dateCols[0],numericCols[0],"chartCanvas1",`${numericCols[0]} over ${dateCols[0]}`)) { used.date.add(dateCols[0]); used.num.add(numericCols[0]); addExplainer("chartCanvas1","Trend with rolling average. Shift+Drag to brush filter."); } }
-  if (numericCols.length>=2){ if (renderScatterWithTrend(rows,numericCols[0],numericCols[1],"chartCanvas2",`${numericCols[0]} vs ${numericCols[1]}`)) { used.num.add(numericCols[0]); used.num.add(numericCols[1]); addExplainer("chartCanvas2","Relationship with best-fit line."); } }
-  if (categoricalCols.length && numericCols.length){ if (renderBarCategory(rows,categoricalCols[0],numericCols[0],"chartCanvas3",`${numericCols[0]} by ${categoricalCols[0]}`)) { used.cat.add(categoricalCols[0]); used.num.add(numericCols[0]); addExplainer("chartCanvas3","Group averages for contrast."); } }
-  if (numericCols.length){ if (renderHistogram(rows, (numericCols.find(n=>!used.num.has(n))||numericCols[0]), "chartCanvas4", `Distribution`)) { used.num.add(numericCols[0]); addExplainer("chartCanvas4","Distribution shape for skew/tails."); } }
-
-  // Nice-to-haves (render if possible)
-  if (categoricalCols.length){ renderDoughnutTopCategories(rows,categoricalCols[0],"chartCanvas5",`Top ${categoricalCols[0]} categories`); }
-  if (dateCols.length && numericCols.length){ renderWeekdayPattern(rows,dateCols[0],numericCols[0],"chartCanvas6",`Weekday pattern of ${numericCols[0]}`); }
-
-  if (numericCols.length>=2){ const corr=computeCorrelationsFromCols(numericCols,rows); if(corr && corr.matrix) renderHeatmap(corr.labels,corr.matrix,"heatmap"); }
-  if (numericCols.length) renderMultiBoxPlot(rows, numericCols.slice(0,4), "boxplot", "Box plots (selected metrics)");
-  if (categoricalCols.length) renderPareto(rows, categoricalCols[0], "chartPareto", `Pareto on ${categoricalCols[0]}`);
-  // guard
+  // Prime charts (and add explainers)
   if (dateCols.length && numericCols.length){
-    renderWaterfallMonthly(rows,dateCols[0],numericCols[0],"waterfall","Waterfall: month-to-month contributions");
-    renderControlChart(rows,dateCols[0],numericCols[0],"chartControl",`Control chart: ${numericCols[0]}`);
-    renderKpiBullets(rows,dateCols[0],numericCols[0]);
-    renderSmallMultiples(rows,dateCols[0],numericCols[0],categoricalCols[0]);
+    if (renderTimeSeriesWithRolling(rows,dateCols[0],numericCols[0],"chartCanvas1",`${numericCols[0]} over ${dateCols[0]}`)) {
+      used.date.add(dateCols[0]); used.num.add(numericCols[0]);
+      addExplainer("chartCanvas1","Time trend with rolling average. Hold Shift and drag to filter all charts.");
+    }
+  }
+  if (numericCols.length>=2){
+    if (renderScatterWithTrend(rows,numericCols[0],numericCols[1],"chartCanvas2",`${numericCols[0]} vs ${numericCols[1]}`)) {
+      used.num.add(numericCols[0]); used.num.add(numericCols[1]);
+      addExplainer("chartCanvas2","Relationship between two measures with a best-fit line.");
+    }
+  }
+  if (categoricalCols.length && numericCols.length){
+    if (renderBarCategory(rows,categoricalCols[0],numericCols[0],"chartCanvas3",`${numericCols[0]} by ${categoricalCols[0]}`)) {
+      used.cat.add(categoricalCols[0]); used.num.add(numericCols[0]);
+      addExplainer("chartCanvas3","Average value per category for quick group comparison.");
+    }
+  }
+  if (numericCols.length){
+    const col = (numericCols.find(n=>!used.num.has(n))||numericCols[0]);
+    if (renderHistogram(rows, col, "chartCanvas4", `Distribution of ${col}`)) {
+      used.num.add(col);
+      addExplainer("chartCanvas4","Distribution shape to spot skew, tails, and gaps.");
+    }
   }
 
-  // Fallback: guarantee minimum of 4 visible charts
-  ensureMinimumCharts(4, rows, dateCols, numericCols, categoricalCols, used);
+  // Secondary visuals
+  if (categoricalCols.length){
+    if (renderDoughnutTopCategories(rows,categoricalCols[0],"chartCanvas5",`Top ${categoricalCols[0]} categories`)) {
+      addExplainer("chartCanvas5","Proportions of top categories (labels show count and %).");
+    }
+  }
+  if (dateCols.length && numericCols.length){
+    if (renderWeekdayPattern(rows,dateCols[0],numericCols[0],"chartCanvas6",`Weekday pattern of ${numericCols[0]}`)) {
+      addExplainer("chartCanvas6","Average by weekday to reveal seasonality patterns.");
+    }
+  }
 
+  if (numericCols.length>=2){
+    const corr=computeCorrelationsFromCols(numericCols,rows);
+    if(corr && corr.matrix && renderHeatmap(corr.labels,corr.matrix,"heatmap")){
+      addExplainer("heatmap","Correlation strength (–1 to +1) across numeric metrics.");
+    }
+  }
+  if (numericCols.length){
+    if (renderMultiBoxPlot(rows, numericCols.slice(0,4), "boxplot", "Box plots (selected metrics)")){
+      addExplainer("boxplot","Spread, median, and outliers per metric.");
+    }
+  }
+  if (categoricalCols.length){
+    if (renderPareto(rows, categoricalCols[0], "chartPareto", `Pareto on ${categoricalCols[0]}`)){
+      addExplainer("chartPareto","80/20 view: bars are counts, line is cumulative share.");
+    }
+  }
+  if (dateCols.length && numericCols.length){
+    if (renderWaterfallMonthly(rows,dateCols[0],numericCols[0],"waterfall","Waterfall: month-to-month contributions")){
+      addExplainer("waterfall","How each month adds/subtracts to the total change.");
+    }
+    if (renderControlChart(rows,dateCols[0],numericCols[0],"chartControl",`Control chart: ${numericCols[0]}`)){
+      addExplainer("chartControl","Process stability vs ±3σ limits (red points breach limits).");
+    }
+    if (renderKpiBullets(rows,dateCols[0],numericCols[0])){
+      addExplainer("kpiBullets","KPIs vs target (P90). Vertical line marks target.");
+    }
+    if (renderSmallMultiples(rows,dateCols[0],numericCols[0],categoricalCols[0])){
+      addExplainer("smallMultiples","Same metric over time for top categories (quick side-by-side).");
+    }
+  }
+
+  // Guarantee at least 4 charts visible
+  ensureMinimumCharts(4, rows, dateCols, numericCols, categoricalCols, used);
   cleanupEmptyCards();
 }
 
-/* ------- ensure minimum N charts (fallback pass) ------- */
+/* ------- ensure minimum N charts (fallback) ------- */
 function nextFreeCanvasId(){
   const ids=["chartCanvas1","chartCanvas2","chartCanvas3","chartCanvas4","chartCanvas5","chartCanvas6","chartPareto","chartControl"];
   for (const id of ids){ const card=cardOf(id); if (card && !card.classList.contains('show')) return id; }
@@ -429,29 +478,29 @@ function ensureMinimumCharts(minCount, rows, dateCols, numericCols, categoricalC
   let shown=countShown();
   if (shown>=minCount) return;
 
-  // 1) Extra histograms (fast + always possible with numeric)
+  // extra histograms
   for (const col of numericCols){
     if (shown>=minCount) break;
     if (used.num.has(col)) continue;
     const id=nextFreeCanvasId(); if(!id) break;
-    if (renderHistogram(rows, col, id, `Distribution of ${col}`)) { used.num.add(col); shown=countShown(); }
+    if (renderHistogram(rows, col, id, `Distribution of ${col}`)) { addExplainer(id,"Distribution shape to spot skew, tails, and gaps."); used.num.add(col); shown=countShown(); }
   }
 
-  // 2) Pairwise scatters
+  // pairwise scatters
   for (let i=0;i<numericCols.length && shown<minCount;i++){
     for (let j=i+1;j<numericCols.length && shown<minCount;j++){
       const x=numericCols[i], y=numericCols[j];
       const id=nextFreeCanvasId(); if(!id) break;
-      if (renderScatterWithTrend(rows, x, y, id, `${x} vs ${y}`)) { used.num.add(x); used.num.add(y); shown=countShown(); }
+      if (renderScatterWithTrend(rows, x, y, id, `${x} vs ${y}`)) { addExplainer(id,"Relationship between two measures with a best-fit line."); used.num.add(x); used.num.add(y); shown=countShown(); }
     }
   }
 
-  // 3) Category count bars
+  // category counts
   for (const cat of categoricalCols){
     if (shown>=minCount) break;
     if (used.cat.has(cat)) continue;
     const id=nextFreeCanvasId(); if(!id) break;
-    if (renderBarCounts(rows, cat, id, `Counts of ${cat}`)) { used.cat.add(cat); shown=countShown(); }
+    if (renderBarCounts(rows, cat, id, `Counts of ${cat}`)) { addExplainer(id,"Count of records per category."); used.cat.add(cat); shown=countShown(); }
   }
 }
 
@@ -524,9 +573,27 @@ function renderDoughnutTopCategories(rows,catCol,canvasId,title){
   const canvas=prepareCanvas(canvasId);
   const freq={}; rows.forEach(r=>{ const k=(r[catCol]==null||r[catCol]==="")?"(missing)":String(r[catCol]); freq[k]=(freq[k]||0)+1; });
   const entries=Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,8); if(!entries.length){ if(canvas){canvas.style.display="none"; hideCard(canvas);} return false; }
-  const labels=entries.map(e=>e[0]), data=entries.map(e=>e[1]);
+  const labels=entries.map(e=>e[0]), data=entries.map(e=>e[1]), total=data.reduce((a,b)=>a+b,0)||1;
   if (canvas._chart) canvas._chart.destroy();
-  canvas._chart=new Chart(canvas.getContext("2d"),{ type:"doughnut", data:{labels, datasets:[{label:title, data}]}, options: withZoomSyncOptions({ ...chartOptionsBase, plugins:{ legend:{position:'bottom'} } }, canvas) });
+  canvas._chart=new Chart(canvas.getContext("2d"),{
+    type:"doughnut",
+    data:{labels, datasets:[{label:title, data}]},
+    options: withZoomSyncOptions({
+      ...chartOptionsBase,
+      plugins:{
+        legend:{ position:'bottom' },
+        datalabels:{
+          color:'#0b1020',
+          backgroundColor:'rgba(255,255,255,0.85)',
+          borderRadius:6, padding:4, font:{weight:700},
+          display:(ctx)=>{ const v=ctx.dataset.data[ctx.dataIndex]; return (v/total)>0.05; },
+          formatter:(value,ctx)=>{ const sum=ctx.dataset.data.reduce((a,b)=>a+b,0)||1; const pct=Math.round((value/sum)*100); return `${value} (${pct}%)`; }
+        },
+        tooltip:{ callbacks:{ label:(tt)=>{ const v=tt.parsed; const sum=tt.dataset.data.reduce((a,b)=>a+b,0)||1; const pct=Math.round((v/sum)*100); return `${tt.label}: ${v} (${pct}%)`; } } }
+      },
+      cutout:'55%'
+    }, canvas)
+  });
   setTimeout(()=>canvas._chart.resize(),0); chartInstances.push(canvas._chart); return true;
 }
 function renderWeekdayPattern(rows,dateCol,numCol,canvasId,title){
@@ -540,7 +607,7 @@ function renderWeekdayPattern(rows,dateCol,numCol,canvasId,title){
   setTimeout(()=>canvas._chart.resize(),0); chartInstances.push(canvas._chart); return true;
 }
 
-/* ------------- Plotly charts (return true/false) ------ */
+/* ------------- Plotly charts  ------ */
 function renderMultiBoxPlot(rows, cols, containerId, title){
   const el=preparePlotContainer(containerId);
   const traces=cols.map(c=>{ const v=rows.map(r=>toNumber(r[c])).filter(x=>x!==null); return v.length?{y:v,type:'box',name:c,boxpoints:'outliers'}:null; }).filter(Boolean);
@@ -688,7 +755,7 @@ swatches().forEach((btn,i)=>{ if(i===0) btn.classList.add("active"); btn.addEven
 widthRange.addEventListener("input",()=>{ markerWidth=parseInt(widthRange.value,10); widthVal.textContent=`${markerWidth}px`; });
 clearAnnotsBtn.addEventListener("click", clearHighlights);
 
-// dock visibility on scroll/move
+// dock visibility
 let hideTimer=null;
 function hideDock(){ annotDock.classList.add("dock-hidden"); paletteHide(); }
 function showDock(){ annotDock.classList.remove("dock-hidden"); }

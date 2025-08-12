@@ -44,7 +44,7 @@ button{
 button:hover{ transform: translateY(-1px); background: rgba(255,255,255,0.1) }
 button:disabled{ opacity:0.55; cursor:not-allowed }
 .btn-secondary{ background: linear-gradient(180deg, rgba(96,165,250,0.15), rgba(96,165,250,0.08)); border-color: rgba(96,165,250,0.3) }
-input[type=file]{ background: transparent; color:rgba(96, 234, 91, 0.971) }
+input[type=file]{ background: transparent; color:var(--muted) }
 .small{color:var(--muted);font-size:12px}
 
 /* Layout */
