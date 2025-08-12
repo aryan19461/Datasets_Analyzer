@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Data Pre-processing • Dataset Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    /* Toolbar + buttons */
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+    .toolbar .group { display:flex; gap:8px; align-items:center }
+    .btn, .btn-secondary {
+      display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer;
+      text-decoration:none; font-weight:600; font-size:14px; border:none;
+    }
+    .btn { background:#2563eb; color:#fff; }
+    .btn:hover { filter:brightness(1.05) }
+    .btn-secondary { background:#475569; color:#fff; }
+    .btn-secondary:hover { filter:brightness(1.08) }
+    select.btn-secondary { appearance:none; -webkit-appearance:none; -moz-appearance:none; }
+
+    /* Panels, tables, badges */
+    .grid-2 { display:grid; grid-template-columns: 320px 1fr; gap:16px; align-items:start }
+    .pipeline { background:#0b1020; border-radius:14px; padding:12px; border:1px solid #1f2937;width: 1267px; }
+    .pipe-row { display:grid; grid-template-columns: 1fr auto; gap:8px; background:#0f172a; padding:10px; border-radius:10px; margin-bottom:8px; border:1px solid #1f2937; }
+    .pipe-controls { display:flex; gap:6px; align-items:center }
+    .pipe-controls button { padding:6px 8px; border-radius:8px; border:1px solid #334155; background:#111827; color:#d1d5db; cursor:pointer; }
+    .pipe-controls button:hover { background:#0b1020 }
+    .pipe-title { display:flex; gap:8px; align-items:center; font-weight:700; color:#e5e7eb }
+    .pipe-title small { font-weight:500; color:#93c5fd }
+    .pipe-body { margin-top:8px; display:grid; gap:8px; color:#cbd5e1; }
+    .pipe-body label { font-size:13px; display:flex; gap:8px; align-items:center }
+    .pipe-body input[type="number"], .pipe-body select, .pipe-body input[type="text"] {
+      background:#0b1020; color:#e5e7eb; border:1px solid #334155; border-radius:8px; padding:6px 8px; min-width:80px;
+    }
+    /* --- Horizontal pipeline --- */
+.pipe-scroller{
+  display:flex; gap:12px; align-items:stretch;
+  overflow-x:auto; padding:10px 4px 6px; scrollbar-width:thin;
+}
+.pipe-chip{
+  display:flex; flex-direction:column; gap:8px; min-width:260px; max-width:360px;
+  background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
+}
+.pipe-chip .chip-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.pipe-chip .pipe-title{ display:flex; align-items:center; gap:8px; font-weight:700; color:#e5e7eb }
+.pipe-chip .pipe-title small{ font-weight:500; color:#93c5fd }
+.pipe-chip .pipe-body{ display:grid; gap:8px; color:#cbd5e1 }
+.pipe-chip .pipe-controls{ display:flex; gap:6px; align-items:center }
+.pipe-chip button{ padding:6px 8px; border-radius:8px; border:1px solid #334155; background:#111827; color:#d1d5db; cursor:pointer }
+.pipe-chip button:hover{ background:#0b1020 }
+
+/* connector arrows between chips */
+.pipe-connector{
+  align-self:center; flex:0 0 auto;
+  width:34px; height:2px; background:#334155; position:relative; margin:0 2px;
+}
+.pipe-connector::after{
+  content:""; position:absolute; right:-6px; top:-4px;
+  border-top:5px solid transparent; border-bottom:5px solid transparent; border-left:6px solid #334155;
+}
+
+/* drag styles */
+.pipe-chip[draggable="true"]{ cursor:grab }
+.pipe-chip.dragging{ opacity:.6; outline:1px dashed #60a5fa }
+.pipe-chip.drop-target{ outline:2px dashed #60a5fa }
+
+    .mini { font-size:12px; color:#9ca3af }
+    .table-wrap { display:block; }
+    table.preview { width:100%; border-collapse:collapse; font-size:12px; }
+    table.preview th, table.preview td { border:1px solid #20304a; padding:6px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    table.preview th { position:sticky; top:0; background:#0f172a; color:#cbd5e1; z-index:1 }
+    .changed { background:rgba(250, 204, 21, 0.2) }
+    .added { background:rgba(52, 211, 153, 0.2) }
+    .badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px }
+    .badge { padding:6px 10px; border-radius:999px; background:#0f172a; color:#cbd5e1; font-size:12px; border:1px solid #1f2937 }
+    .section-title { display:flex; justify-content:space-between; align-items:center }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#0f172a; color:#cbd5e1; font-size:12px }
+
+    /* Progress bars */
+    .progress-wrap { min-width:240px; display:flex; flex-direction:column; gap:6px }
+    .progress { width:280px; height:10px; background:#0b1020; border-radius:999px; border:1px solid #1f2937; overflow:hidden }
+    .progress .bar { height:100%; width:0%; background:#60a5fa; transition:width .18s ease-in-out }
+    .progress-meta { display:flex; justify-content:space-between; font-size:12px; color:#9ca3af }
+    .progress-sm .progress { width:220px; height:6px }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Data Pre-processing</h1>
+    <nav class="socials" aria-label="Back links">
+      <a class="social" href="index.html" aria-label="Back to Dashboard">← Back to Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="toolbar">
+    <!-- File / upload group -->
+    <div class="group">
+      <input type="file" id="ppFile" accept=".csv,.xlsx,.xls" />
+      <button id="btnUseCached" class="btn-secondary">Use dataset from Dashboard</button>
+
+      <!-- Upload progress -->
+      <div id="uploadProg" class="progress-wrap" aria-live="polite">
+        <div class="progress"><div class="bar" id="uploadBar" style="width:0%"></div></div>
+        <div class="progress-meta">
+          <span id="uploadLabel">Waiting for file…</span>
+          <span id="uploadRight"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline controls -->
+    <div class="group">
+      <select id="stepChooser" class="btn-secondary" style="min-width:260px">
+        <option value="">+ Select a step to add…</option>
+      </select>
+      <button id="btnAddSelected" class="btn">Add Step</button>
+      <button id="btnImportPipe" class="btn-secondary">Import Pipeline</button>
+      <button id="btnExportPipe" class="btn-secondary">Export Pipeline</button>
+    </div>
+
+    <!-- Apply / Download group -->
+    <div class="group">
+      <button id="btnApply" class="btn" disabled>Apply Steps</button>
+      <button id="btnDownload" class="btn-secondary" disabled>Download</button>
+      <button id="btnSendToDashboard" class="btn-secondary" disabled>Open in Dashboard</button>
+
+      <!-- Processing progress (small) -->
+      <div id="procProg" class="progress-wrap progress-sm" aria-live="polite">
+        <div class="progress"><div class="bar" id="procBar" style="width:0%"></div></div>
+        <div class="progress-meta">
+          <span id="procLabel">Idle</span>
+          <span id="procRight"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:1300px;margin:16px auto;padding:0 16px">
+  <section class="grid-2">
+    <!-- Pipeline column -->
+    <div class="pipeline">
+      <h3>Pipeline</h3>
+      <div class="mini">Build and reorder your transformation steps. Toggle each step on/off.</div>
+      <!-- CHANGED: add pipe-scroller class -->
+      <div id="pipeList" class="pipe-scroller" aria-live="polite"></div>
+    </div>
+    
+
+
+  </section>
+
+       <!-- Options column (badges only here now) -->
+       <div class="card">
+        <div class="section-title">
+          <h2>Split & Options</h2>
+        </div>
+        <div class="badges" id="qualityBadges"></div>
+      </div>
+      
+        <!-- DOWNLOAD MODE (kept after the new block) -->
+  <section class="card" style="margin-top:16px">
+    <div class="section-title">
+      <h3 style="margin:0">Download Mode</h3>
+    </div>
+    <div class="mini" style="margin-top:6px">
+      <label><input type="radio" name="dlmode" value="single" checked> Single file (processed.csv)</label>
+      <label style="margin-left:12px"><input type="radio" name="dlmode" value="stratified"> Stratified split (train/test)</label>
+      <label style="margin-left:12px"><input type="radio" name="dlmode" value="time"> Time-based split (train/test)</label>
+    </div>
+
+    <div class="grid" style="gap:10px; margin-top:8px">
+      <div class="card-small" id="strataBox">
+        <strong style="color:var(--accent)">Stratified</strong>
+        <div class="pipe-body" style="margin-top:6px">
+          <label>Label column
+            <select id="strataLabel"></select>
+          </label>
+          <label>Test % <input id="strataPct" type="number" min="1" max="90" value="20"></label>
+        </div>
+      </div>
+
+      <div class="card-small" id="timeBox">
+        <strong style="color:var(--accent)">Time-based</strong>
+        <div class="pipe-body" style="margin-top:6px">
+          <label>Date column
+            <select id="timeDateCol"></select>
+          </label>
+          <label>Hold out last % <input id="timePct" type="number" min="1" max="90" value="20"></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
+  <!-- NEW: DATASET INFORMATION BLOCK (placed between Preview and Download Mode) -->
+  <section class="card" style="margin-top:16px">
+    <div class="section-title">
+      <h2>Dataset Information</h2>
+      <select id="infoSource" class="btn-secondary" style="padding:4px 8px; font-size:12px">
+        <option value="after">After</option>
+        <option value="before">Original</option>
+      </select>
+    </div>
+    <div id="dsBadges" class="badges"></div>
+    <div style="overflow:auto; max-height:360px; margin-top:8px">
+      <table class="preview" id="colInfoTable"></table>
+    </div>
+    <div class="mini" style="margin-top:8px">
+      Tip: switch “After / Original” to inspect columns before/after processing.
+    </div>
+  </section>
+
+  <!-- PREVIEW: stacked panels -->
+  <section class="card" style="margin-top:16px">
+    <div class="section-title">
+      <h2>Preview — Before</h2>
+      <span class="pill"><span id="metaRows">Rows: 0</span> • <span id="metaCols">Cols: 0</span></span>
+    </div>
+    <div class="mini">Original dataset (first 30 rows)</div>
+    <div style="overflow:auto; max-height:360px"><table class="preview" id="tblIn"></table></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <div class="section-title">
+      <h2>Preview — After</h2>
+      <span class="pill"><span id="metaRowsOut">Rows: 0</span> • <span id="metaColsOut">Cols: 0</span></span>
+    </div>
+    <div class="mini">After applying pipeline (first 30 rows)</div>
+    <div style="overflow:auto; max-height:360px"><table class="preview" id="tblOut"></table></div>
+    <div class="mini" style="margin-top:6px">
+      <span class="badge">Changed</span>
+      <span class="badge" style="margin-left:6px">Added column</span>
+    </div>
+  </section>
+
+
+
+</main>
+
+<footer style="margin:12px 16px">
+  <small>Tip: “Open in Dashboard” will replace the current dataset there.</small>
+  <input type="file" id="pipeImportFile" accept=".json" style="display:none" />
+</footer>
+
+<script src="preprocess.js"></script>
+</body>
+</html>

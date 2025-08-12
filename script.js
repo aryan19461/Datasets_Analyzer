@@ -1,4 +1,5 @@
 // Auto Insights Dashboard – now with friendly per-chart descriptions and slice values on the donut.
+// + Preprocessing integration: save/load dataset via localStorage ("da_data")
 
 const $ = id => document.getElementById(id);
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
@@ -151,6 +152,9 @@ function processParsed(arr){
   const headers=Object.keys(arr[0]);
   const rows=arr.map(r=>{ const o={}; headers.forEach(h=>o[h]=r[h]??""); return o; });
   globalData={ headers, rows };
+  try { localStorage.setItem('da_data', JSON.stringify({ headers, rows })); } catch(e){}
+
+
   buildSummary(globalData);
   exportPdfBtn.disabled=false;
 }
@@ -723,6 +727,9 @@ resetBtn.addEventListener("click", ()=>{
   summaryCards.innerHTML=""; metricsCards.innerHTML=""; datasetPreview.textContent=""; dataTable.innerHTML=""; narrativesDiv.innerHTML="";
   clearCharts(); resetProgress(); clearHighlights(); closeDock(); window.scrollTo({top:0,behavior:"smooth"});
   activeDateCol=null; globalDateFilter=null; brushLinkEnabled=false; brushBtn.disabled=true; clearFilterBtn.classList.add("hidden"); brushBtn.textContent="Brush Filter (Shift+Drag)";
+
+  // NEW: clear cached dataset so next load is fresh
+  try { localStorage.removeItem('da_data'); } catch(e){ /* ignore */ }
 });
 
 /* ------------------- annotation dock ------------------ */
@@ -765,6 +772,20 @@ window.addEventListener("touchstart", showDock, {passive:true});
 
 /* --------------------- init --------------------------- */
 (function init(){
+  // Hide all sections until we have data
   summarySection.classList.add("hidden"); insightsSection.classList.add("hidden"); rawSection.classList.add("hidden"); metricsSection.classList.add("hidden");
   sizeAnnotCanvas(); setTimeout(showDock,300);
+
+  // NEW: auto-load any dataset saved by the preprocessing page (or from a previous load)
+  try {
+    const cached = localStorage.getItem('da_data');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.headers?.length && parsed?.rows?.length) {
+        globalData = parsed;
+        buildSummary(globalData);
+        exportPdfBtn.disabled = false;
+      }
+    }
+  } catch(e){ /* ignore */ }
 })();
